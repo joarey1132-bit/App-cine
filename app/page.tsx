@@ -1,255 +1,197 @@
 "use client";
+import React, { useState } from "react";
+import { QRCodeCanvas } from "qrcode.react";
 
-import React, { useState, useEffect } from "react";
+// Tipos
+type Butaca = {
+  id: number;
+  disponible: boolean;
+  reserva?: {
+    nombre: string;
+    apellido: string;
+    dni: string;
+    telefono: string;
+  };
+};
 
 type Funcion = {
+  id: number;
   titulo: string;
   horario: string;
   precio: number;
+  butacas: Butaca[];
 };
-
-type Butaca = {
-  fila: number;
-  columna: number;
-  reservada: boolean;
-};
-
-// Crear mapa de butacas
-const crearMapa = (filas: number, columnas: number): Butaca[][] =>
-  Array.from({ length: filas }, (_, fila) =>
-    Array.from({ length: columnas }, (_, columna) => ({
-      fila,
-      columna,
-      reservada: false,
-    }))
-  );
 
 export default function Page() {
-  // Funciones dinámicas
   const [funciones, setFunciones] = useState<Funcion[]>([
-    { titulo: "El Exorcista", horario: "Viernes 21:00", precio: 1200 },
+    {
+      id: 1,
+      titulo: "Función 1",
+      horario: "18:00",
+      precio: 1000,
+      butacas: Array.from({ length: 140 }, (_, i) => ({
+        id: i + 1,
+        disponible: true,
+      })),
+    },
   ]);
 
-  // Mapa de butacas por función
-  const [mapas, setMapas] = useState([crearMapa(10, 14)] as Butaca[][][]);
+  const [reservaVisible, setReservaVisible] = useState<boolean>(false);
 
-  const [funcionActual, setFuncionActual] = useState(0);
-
-  // Cargar desde localStorage
-  useEffect(() => {
-    const guardadoFunciones = localStorage.getItem("funciones");
-    const guardadoMapas = localStorage.getItem("mapas");
-    if (guardadoFunciones) setFunciones(JSON.parse(guardadoFunciones));
-    if (guardadoMapas) setMapas(JSON.parse(guardadoMapas));
-  }, []);
-
-  // Guardar cambios
-  useEffect(() => {
-    localStorage.setItem("funciones", JSON.stringify(funciones));
-    localStorage.setItem("mapas", JSON.stringify(mapas));
-  }, [funciones, mapas]);
-
-  // Sincronizar mapas cuando agregamos funciones nuevas
-  useEffect(() => {
-    if (funciones.length > mapas.length) {
-      const nuevosMapas = [...mapas];
-      for (let i = mapas.length; i < funciones.length; i++) {
-        nuevosMapas.push(crearMapa(10, 14));
-      }
-      setMapas(nuevosMapas);
-    }
-  }, [funciones, mapas]);
-
-  // Alternar reserva de butaca
-  const toggleButaca = (fila: number, columna: number) => {
-    setMapas((prev) => {
-      const nuevoMapa = (prev[funcionActual] || crearMapa(10, 14)).map((filaArr) =>
-        filaArr.map((b) =>
-          b.fila === fila && b.columna === columna
-            ? { ...b, reservada: !b.reservada }
-            : b
-        )
-      );
-      const nuevoMapas = [...prev];
-      nuevoMapas[funcionActual] = nuevoMapa;
-      return nuevoMapas;
-    });
-  };
-
-  // Contadores seguros
-  const mapaActual = mapas[funcionActual] || crearMapa(10, 14);
-  const funcion = funciones[funcionActual];
-  const totalButacas = mapaActual.flat().length;
-  const reservadas = mapaActual.flat().filter((b) => b.reservada).length;
-  const libres = totalButacas - reservadas;
-  const porcentajeReservadas = ((reservadas / totalButacas) * 100).toFixed(2);
-
-  // Actualizar función
-  const actualizarFuncion = (campo: keyof Funcion, valor: string | number) => {
-    setFunciones((prev) => {
-      const nuevo = [...prev];
-      nuevo[funcionActual] = { ...nuevo[funcionActual], [campo]: valor };
-      return nuevo;
-    });
-  };
-
-  // Agregar función nueva
+  // Funciones de manejo de funciones
   const agregarFuncion = () => {
-    setFunciones([
-      ...funciones,
-      { titulo: "Nueva función", horario: "00:00", precio: 0 },
-    ]);
-    setFuncionActual(funciones.length); // Ir a la nueva función
+    const nuevaFuncion: Funcion = {
+      id: funciones.length + 1,
+      titulo: "Nueva Función",
+      horario: "00:00",
+      precio: 0,
+      butacas: Array.from({ length: 140 }, (_, i) => ({
+        id: i + 1,
+        disponible: true,
+      })),
+    };
+    setFunciones([...funciones, nuevaFuncion]);
   };
 
-  // Eliminar función actual
-  const eliminarFuncion = () => {
-    if (funciones.length <= 1) return; // Siempre al menos 1 función
-    const nuevasFunciones = funciones.filter((_, i) => i !== funcionActual);
-    const nuevosMapas = mapas.filter((_, i) => i !== funcionActual);
-    setFunciones(nuevasFunciones);
-    setMapas(nuevosMapas);
-    setFuncionActual(Math.max(0, funcionActual - 1));
+  const borrarFuncion = (id: number) => {
+    setFunciones(funciones.filter((f) => f.id !== id));
+  };
+
+  const modificarFuncion = (id: number, campo: string, valor: string | number) => {
+    setFunciones(
+      funciones.map((f) =>
+        f.id === id ? { ...f, [campo]: valor } : f
+      )
+    );
+  };
+
+  // Funciones de manejo de reservas
+  const reservarButaca = (funcionId: number, butacaId: number) => {
+    const nombre = prompt("Nombre:") || "";
+    const apellido = prompt("Apellido:") || "";
+    const dni = prompt("DNI:") || "";
+    const telefono = prompt("Teléfono:") || "";
+
+    setFunciones(
+      funciones.map((f) => {
+        if (f.id === funcionId) {
+          const nuevasButacas = f.butacas.map((b) =>
+            b.id === butacaId
+              ? {
+                  ...b,
+                  disponible: false,
+                  reserva: { nombre, apellido, dni, telefono },
+                }
+              : b
+          );
+          return { ...f, butacas: nuevasButacas };
+        }
+        return f;
+      })
+    );
+  };
+
+  const descargarQR = (reserva: Butaca["reserva"], butacaId: number) => {
+    if (!reserva) return;
+    const canvas = document.createElement("canvas");
+    const size = 300; // tamaño QR
+    canvas.width = size;
+    canvas.height = size;
+
+    const qr = (
+      <QRCodeCanvas
+        value={`Butaca ${butacaId}\nNombre: ${reserva.nombre}\nApellido: ${reserva.apellido}\nDNI: ${reserva.dni}\nTeléfono: ${reserva.telefono}`}
+        size={size}
+        level="H"
+        includeMargin={true}
+      />
+    );
+
+    const tempDiv = document.createElement("div");
+    tempDiv.appendChild(canvas);
+
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, size, size);
+      ctx.fillStyle = "#000000";
+      ctx.font = "14px Arial";
+      ctx.fillText(`Nombre: ${reserva.nombre}`, 10, size - 60);
+      ctx.fillText(`Apellido: ${reserva.apellido}`, 10, size - 40);
+      ctx.fillText(`DNI: ${reserva.dni}`, 10, size - 25);
+      ctx.fillText(`Tel: ${reserva.telefono}`, 10, size - 10);
+    }
+
+    const link = document.createElement("a");
+    link.download = `butaca-${butacaId}.png`;
+    link.href = canvas.toDataURL();
+    link.click();
   };
 
   return (
-    <div style={{ textAlign: "center", padding: "20px", fontFamily: "sans-serif" }}>
-      {/* Pestañas dinámicas */}
-      <div style={{ marginBottom: "25px" }}>
-        {funciones.map((f, i) => (
-          <button
-            key={i}
-            onClick={() => setFuncionActual(i)}
-            style={{
-              margin: "5px",
-              padding: "10px 20px",
-              borderRadius: "10px",
-              border: funcionActual === i ? "2px solid #000" : "1px solid gray",
-              background: funcionActual === i ? "#ddd" : "#fff",
-              cursor: "pointer",
-            }}
-          >
-            {f.titulo} <br />
-            <small>{f.horario}</small>
-          </button>
-        ))}
-        <button
-          onClick={agregarFuncion}
-          style={{
-            margin: "5px",
-            padding: "10px 20px",
-            borderRadius: "10px",
-            cursor: "pointer",
-          }}
-        >
-          + Agregar función
-        </button>
-        <button
-          onClick={eliminarFuncion}
-          style={{
-            margin: "5px",
-            padding: "10px 20px",
-            borderRadius: "10px",
-            cursor: "pointer",
-          }}
-        >
-          🗑️ Eliminar función
-        </button>
-      </div>
+    <div style={{ padding: "20px", fontFamily: "Arial, sans-serif", backgroundColor: "#ffde2f", minHeight: "100vh" }}>
+      <h1 style={{ textAlign: "center", color: "#be1824" }}>Cine</h1>
 
-      {/* Inputs editables */}
-      <div style={{ marginBottom: "15px" }}>
-        <input
-          type="text"
-          value={funcion.titulo}
-          onChange={(e) => actualizarFuncion("titulo", e.target.value)}
-          style={{ fontSize: "20px", marginRight: "10px" }}
-        />
-        <input
-          type="text"
-          value={funcion.horario}
-          onChange={(e) => actualizarFuncion("horario", e.target.value)}
-          style={{ fontSize: "16px", marginRight: "10px" }}
-        />
-        <input
-          type="number"
-          value={funcion.precio ?? 0}
-          onChange={(e) =>
-            actualizarFuncion(
-              "precio",
-              e.target.value === "" ? 0 : parseInt(e.target.value)
-            )
-          }
-          style={{ fontSize: "16px", width: "80px" }}
-        />
-      </div>
+      <button onClick={agregarFuncion} style={{ marginBottom: "20px" }}>Agregar Función</button>
 
-      {/* Contadores */}
-      <div style={{ marginBottom: "15px", fontSize: "16px" }}>
-        <strong>Total:</strong> {totalButacas} &nbsp;|&nbsp;
-        <strong>Reservadas:</strong> {reservadas} &nbsp;|&nbsp;
-        <strong>Libres:</strong> {libres} &nbsp;|&nbsp;
-        <strong>% Reservadas:</strong> {porcentajeReservadas}%
-      </div>
+      {funciones.map((f) => (
+        <div key={f.id} style={{ marginBottom: "30px", padding: "10px", backgroundColor: "#ffffff", border: "2px solid #be1824" }}>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <div>
+              <input
+                type="text"
+                value={f.titulo}
+                onChange={(e) => modificarFuncion(f.id, "titulo", e.target.value)}
+              />
+              <input
+                type="text"
+                value={f.horario}
+                onChange={(e) => modificarFuncion(f.id, "horario", e.target.value)}
+              />
+              <input
+                type="number"
+                value={f.precio}
+                onChange={(e) => modificarFuncion(f.id, "precio", Number(e.target.value))}
+              />
+            </div>
+            <button onClick={() => borrarFuncion(f.id)} style={{ backgroundColor: "#be1824", color: "#fff" }}>Borrar Función</button>
+          </div>
 
-      {/* Mapa de butacas */}
-      <div
-        style={{
-          display: "inline-block",
-          backgroundColor: "#fff",
-          padding: "15px",
-          borderRadius: "10px",
-          boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
-        }}
-      >
-        {mapaActual.map((fila, i) => (
-          <div key={i} style={{ display: "flex", justifyContent: "center" }}>
-            {fila.map((butaca) => (
-              <div
-                key={`${butaca.fila}-${butaca.columna}`}
-                onClick={() => toggleButaca(butaca.fila, butaca.columna)}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(20, 1fr)", gap: "5px", marginTop: "10px" }}>
+            {f.butacas.map((b) => (
+              <button
+                key={b.id}
                 style={{
-                  width: "25px",
-                  height: "25px",
-                  margin: "3px",
-                  borderRadius: "4px",
-                  background: butaca.reservada ? "#ff6961" : "#90ee90",
-                  cursor: "pointer",
-                  transition: "background 0.2s",
+                  backgroundColor: b.disponible ? "#ffde2f" : "#be1824",
+                  color: "#000",
+                  padding: "5px",
+                  fontSize: "12px",
                 }}
-              ></div>
+                onClick={() => b.disponible && reservarButaca(f.id, b.id)}
+              >
+                {b.id}
+              </button>
             ))}
           </div>
-        ))}
-      </div>
 
-      {/* Leyenda */}
-      <div style={{ marginTop: "20px", fontSize: "14px", color: "#444" }}>
-        <div style={{ display: "inline-flex", alignItems: "center", marginRight: "10px" }}>
-          <div
-            style={{
-              width: "18px",
-              height: "18px",
-              background: "#90ee90",
-              marginRight: "5px",
-              borderRadius: "3px",
-            }}
-          ></div>
-          Libre
+          <button onClick={() => setReservaVisible(!reservaVisible)} style={{ marginTop: "10px" }}>
+            {reservaVisible ? "Ocultar Reservas" : "Mostrar Reservas"}
+          </button>
+
+          {reservaVisible && (
+            <div style={{ marginTop: "10px" }}>
+              {f.butacas
+                .filter((b) => !b.disponible && b.reserva)
+                .map((b) => (
+                  <div key={b.id} style={{ marginBottom: "5px", padding: "5px", border: "1px solid #000" }}>
+                    Butaca {b.id} - {b.reserva?.nombre} {b.reserva?.apellido} - {b.reserva?.dni} - {b.reserva?.telefono}
+                    <button onClick={() => descargarQR(b.reserva, b.id)} style={{ marginLeft: "10px" }}>Descargar QR</button>
+                  </div>
+                ))}
+            </div>
+          )}
         </div>
-        <div style={{ display: "inline-flex", alignItems: "center" }}>
-          <div
-            style={{
-              width: "18px",
-              height: "18px",
-              background: "#ff6961",
-              marginRight: "5px",
-              borderRadius: "3px",
-            }}
-          ></div>
-          Reservada
-        </div>
-      </div>
+      ))}
     </div>
   );
 }
